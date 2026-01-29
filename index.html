@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Painel Completo da Agência</title>
+<style>
+body { font-family: Arial, sans-serif; background: #f4f6f8; padding: 20px; }
+h1 { margin-bottom: 20px; }
+nav button { padding: 10px 15px; margin-right: 10px; border: none; cursor: pointer; background: #000; color: #fff; border-radius: 4px; }
+.card { background: #fff; padding: 20px; margin-top: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); max-width:1200px; }
+input, textarea, select, button { padding: 8px; margin: 5px 0; width: 100%; box-sizing:border-box; }
+button { cursor:pointer; border:none; border-radius:4px; }
+.btn-add { background:#000; color:#fff; }
+.btn-remove { background:red; color:#fff; }
+table { width:100%; border-collapse: collapse; margin-top:15px; }
+th, td { padding:10px; border-bottom:1px solid #ddd; }
+th { background:#f0f0f0; }
+.status-ok { color:green; font-weight:bold; }
+.status-pendente { color:orange; font-weight:bold; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<h1>Painel Completo da Agência</h1>
+<nav>
+  <button onclick="mostrarAba('clientes')">Clientes</button>
+  <button onclick="mostrarAba('postagens')">Postagens</button>
+  <button onclick="mostrarAba('investimentos')">Investimentos</button>
+  <button onclick="mostrarAba('graficos')">Gráficos</button>
+</nav>
+
+<!-- ABA CLIENTES -->
+<div id="clientes" class="card">
+<h2>Adicionar Cliente</h2>
+<input id="clienteNome" placeholder="Nome do cliente">
+<input id="clienteValor" type="number" placeholder="Valor mensal">
+<input id="clienteEntrada" type="date">
+<button class="btn-add" onclick="adicionarCliente()">Adicionar Cliente</button>
+
+<h2>Lista de Clientes</h2>
+<table>
+<thead>
+<tr><th>Cliente</th><th>Valor</th><th>Entrada</th><th>Status</th><th>Ação</th></tr>
+</thead>
+<tbody id="listaClientes"></tbody>
+</table>
+</div>
+
+<!-- ABA POSTAGENS -->
+<div id="postagens" class="card" style="display:none">
+<h2>Adicionar Postagem</h2>
+<select id="postCliente"></select>
+<input id="postData" type="date">
+<input id="postDescricao" placeholder="Descrição da postagem">
+<input id="postLink" placeholder="Link da postagem">
+<select id="postStatus">
+<option value="pendente">Pendente</option>
+<option value="feito">Feito</option>
+</select>
+<button class="btn-add" onclick="adicionarPostagem()">Adicionar Postagem</button>
+
+<h2>Postagens Salvas</h2>
+<table>
+<thead>
+<tr><th>Cliente</th><th>Data</th><th>Descrição</th><th>Link</th><th>Status</th><th>Ação</th></tr>
+</thead>
+<tbody id="listaPostagens"></tbody>
+</table>
+</div>
+
+<!-- ABA INVESTIMENTOS -->
+<div id="investimentos" class="card" style="display:none">
+<h2>Adicionar Investimento Mensal</h2>
+<input id="investDescricao" placeholder="Descrição do investimento">
+<input id="investValor" type="number" placeholder="Valor investido">
+<button class="btn-add" onclick="adicionarInvestimento()">Adicionar</button>
+
+<h2>Investimentos Salvos</h2>
+<table>
+<thead><tr><th>Descrição</th><th>Valor</th><th>Ação</th></tr></thead>
+<tbody id="listaInvestimentos"></tbody>
+</table>
+</div>
+
+<!-- ABA GRAFICOS -->
+<div id="graficos" class="card" style="display:none">
+<h2>Gráficos</h2>
+<canvas id="grafClientes" style="max-width:100%;height:300px"></canvas>
+<canvas id="grafFaturamento" style="max-width:100%;height:300px;margin-top:40px"></canvas>
+</div>
+
+<script>
+let clientes = JSON.parse(localStorage.getItem("clientes")) || [];
+let postagens = JSON.parse(localStorage.getItem("postagens")) || [];
+let investimentos = JSON.parse(localStorage.getItem("investimentos")) || [];
+
+function salvar() {
+  localStorage.setItem("clientes", JSON.stringify(clientes));
+  localStorage.setItem("postagens", JSON.stringify(postagens));
+  localStorage.setItem("investimentos", JSON.stringify(investimentos));
+}
+
+function mostrarAba(aba) {
+  ["clientes","postagens","investimentos","graficos"].forEach(a=>document.getElementById(a).style.display=a===aba?"block":"none");
+  if(aba==="graficos") renderGrafico();
+}
+
+function adicionarCliente() {
+  const nome=clienteNome.value;
+  const valor=clienteValor.value;
+  const entrada=clienteEntrada.value;
+  if(!nome||!valor||!entrada){alert("Preencha todos os campos");return;}
+  clientes.push({nome,valor,entrada,status:"ativo"});
+  salvar(); renderizar();
+}
+
+function removerCliente(index) {
+  clientes.splice(index,1);
+  postagens=postagens.filter(p=>p.cliente!==clientes[index]?.nome);
+  salvar(); renderizar();
+}
+
+function adicionarPostagem() {
+  const cliente=postCliente.value;
+  const data=postData.value;
+  const descricao=postDescricao.value;
+  const link=postLink.value;
+  const status=postStatus.value;
+  if(!cliente||!data||!descricao){alert("Preencha campos obrigatórios");return;}
+  postagens.push({cliente,data,descricao,link,status});
+  salvar(); renderizar();
+}
+
+function removerPostagem(index){postagens.splice(index,1);salvar();renderizar();}
+function adicionarInvestimento(){ 
+  const desc=investDescricao.value; 
+  const val=investValor.value;
+  if(!desc||!val){alert("Preencha campos");return;}
+  investimentos.push({desc,val:Number(val)});
+  salvar(); renderizar();
+}
+function removerInvestimento(index){investimentos.splice(index,1);salvar();renderizar();}
+
+function renderizar(){
+  // Clientes
+  listaClientes.innerHTML=""; postCliente.innerHTML="<option value=''>Selecione cliente</option>";
+  clientes.forEach((c,i)=>{
+    listaClientes.innerHTML+=`<tr>
+      <td>${c.nome}</td>
+      <td>R$ ${c.valor}</td>
+      <td>${c.entrada}</td>
+      <td>${c.status}</td>
+      <td><button class="btn-remove" onclick="removerCliente(${i})">Remover</button></td>
+    </tr>`;
+    postCliente.innerHTML+=`<option value="${c.nome}">${c.nome}</option>`;
+  });
+
+  // Postagens
+  listaPostagens.innerHTML="";
+  postagens.forEach((p,i)=>{
+    listaPostagens.innerHTML+=`<tr>
+      <td>${p.cliente}</td>
+      <td>${p.data}</td>
+      <td>${p.descricao}</td>
+      <td><a href="${p.link}" target="_blank">Abrir</a></td>
+      <td class="${p.status==='feito'?'status-ok':'status-pendente'}">${p.status}</td>
+      <td><button class="btn-remove" onclick="removerPostagem(${i})">Remover</button></td>
+    </tr>`;
+  });
+
+  // Investimentos
+  listaInvestimentos.innerHTML="";
+  investimentos.forEach((inv,i)=>{
+    listaInvestimentos.innerHTML+=`<tr>
+      <td>${inv.desc}</td>
+      <td>R$ ${inv.val}</td>
+      <td><button class="btn-remove" onclick="removerInvestimento(${i})">Remover</button></td>
+    </tr>`;
+  });
+}
+
+function renderGrafico(){
+  const ctx=document.getElementById("grafClientes").getContext("2d");
+  const entrou=clientes.length;
+  const saiu=clientes.filter(c=>c.status==="saiu").length;
+  const permaneceu=clientes.filter(c=>c.status==="ativo").length;
+  if(window.grafCli) window.grafCli.destroy();
+  window.grafCli=new Chart(ctx,{
+    type:'pie',
+    data:{labels:['Entrou','Permaneceu','Saiu'],datasets:[{data:[entrou,permaneceu,saiu],backgroundColor:['#36A2EB','#4BC0C0','#FF6384']}]},
+    options:{responsive:true}
+  });
+
+  const ctx2=document.getElementById("grafFaturamento").getContext("2d");
+  const totalFaturamento=clientes.reduce((sum,c)=>sum+Number(c.valor),0);
+  if(window.grafFat) window.grafFat.destroy();
+  window.grafFat=new Chart(ctx2,{
+    type:'bar',
+    data:{labels:['Faturamento'],datasets:[{label:'R$ Faturamento',data:[totalFaturamento],backgroundColor:'#36A2EB'}]},
+    options:{responsive:true,scales:{y:{beginAtZero:true}}}
+  });
+}
+
+renderizar();
+</script>
+
+</body>
+</html>
